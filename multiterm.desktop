@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Name=MultiTerm SSH
+Comment=A custom GTK terminal with native SSH multiplexing tabs
+Exec=/home/shaiksameer/.local/bin/multiterm
+Icon=utilities-terminal
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;commandline;cmd;ssh;
+StartupNotify=true
