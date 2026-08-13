@@ -41,7 +41,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.open(pane);
 
   // Send input to Rust backend
-  term.onData(async (data) => {
+  term.onData(async (data: string) => {
     await invoke("write_pty", { data });
   });
 
