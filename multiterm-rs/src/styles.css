@@ -50,3 +50,57 @@ html, body {
 .gutter.gutter-horizontal {
   cursor: col-resize;
 }
+
+.gut.xterm .xterm-viewport {
+  border-radius: 4px;
+}
+
+body.broadcast-active .terminal-pane {
+  border: 2px solid #ff4444;
+  box-shadow: inset 0 0 10px rgba(255, 0, 0, 0.3);
+}
+
+#payload-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100vh;
+  background: #252526;
+  border-left: 1px solid #444;
+  color: #fff;
+  z-index: 100;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: sans-serif;
+  transition: transform 0.3s ease;
+}
+
+#payload-drawer.hidden {
+  transform: translateX(100%);
+}
+
+#payload-drawer h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+}
+
+#payload-drawer ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#payload-drawer li {
+  padding: 10px;
+  background: #333;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#payload-drawer li:hover {
+  background: #444;
+}

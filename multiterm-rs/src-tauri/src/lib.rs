@@ -68,15 +68,27 @@ fn spawn_pty(
     let thread_id = id.clone();
     let ptys = state.ptys.clone();
     
+    // Setup Auto-Logging
+    let log_dir = dirs::home_dir().unwrap_or_default().join(".multiterm-logs");
+    std::fs::create_dir_all(&log_dir).unwrap_or_default();
+    let log_path = log_dir.join(format!("{}.log", thread_id));
+    
     thread::spawn(move || {
         let mut reader = reader;
         let mut buf = [0u8; 1024];
+        let mut log_file = std::fs::OpenOptions::new().create(true).append(true).open(log_path).ok();
+
         loop {
             match reader.read(&mut buf) {
                 Ok(n) if n > 0 => {
+                    let chunk = &buf[..n];
+                    if let Some(f) = &mut log_file {
+                        let _ = f.write_all(chunk);
+                    }
+                    
                     let _ = app.emit("pty-output", PtyPayload {
                         id: thread_id.clone(),
-                        data: buf[..n].to_vec(),
+                        data: chunk.to_vec(),
                     });
                 }
                 _ => {
