@@ -1,5 +1,5 @@
-use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem};
-use std::collections::HashMap;
+use portable_pty::{CommandBuilder, MasterPty, NativePtySystem, PtySize, PtySystem, Child};
+use dashmap::DashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -13,9 +13,14 @@ struct PtyPayload {
     data: Vec<u8>,
 }
 
+struct PtyContext {
+    writer: Box<dyn Write + Send>,
+    master: Box<dyn MasterPty + Send>,
+    child: Box<dyn Child + Send + Sync>,
+}
+
 struct AppState {
-    pty_writers: Arc<Mutex<HashMap<String, Box<dyn Write + Send>>>>,
-    pty_masters: Arc<Mutex<HashMap<String, Box<dyn MasterPty + Send>>>>,
+    ptys: DashMap<String, Arc<Mutex<PtyContext>>>,
 }
 
 #[tauri::command]
@@ -45,17 +50,24 @@ fn spawn_pty(
     #[cfg(not(target_os = "windows"))]
     cmd.env("TERM", "xterm-256color");
 
-    let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
     let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
     
     let id = Uuid::new_v4().to_string();
 
-    state.pty_writers.lock().unwrap().insert(id.clone(), writer);
-    state.pty_masters.lock().unwrap().insert(id.clone(), pair.master);
+    let context = PtyContext {
+        writer,
+        master: pair.master,
+        child,
+    };
+
+    state.ptys.insert(id.clone(), Arc::new(Mutex::new(context)));
 
     let thread_id = id.clone();
+    let ptys = state.ptys.clone();
+    
     thread::spawn(move || {
         let mut reader = reader;
         let mut buf = [0u8; 1024];
@@ -67,7 +79,11 @@ fn spawn_pty(
                         data: buf[..n].to_vec(),
                     });
                 }
-                _ => break,
+                _ => {
+                    // Clean up map when process dies naturally
+                    ptys.remove(&thread_id);
+                    break;
+                }
             }
         }
     });
@@ -77,16 +93,18 @@ fn spawn_pty(
 
 #[tauri::command]
 fn write_pty(id: String, data: String, state: State<'_, AppState>) -> Result<(), String> {
-    if let Some(writer) = state.pty_writers.lock().unwrap().get_mut(&id) {
-        writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    if let Some(pty) = state.ptys.get(&id) {
+        let mut pty_guard = pty.lock().unwrap();
+        pty_guard.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 #[tauri::command]
 fn resize_pty(id: String, rows: u16, cols: u16, state: State<'_, AppState>) -> Result<(), String> {
-    if let Some(master) = state.pty_masters.lock().unwrap().get_mut(&id) {
-        master.resize(PtySize {
+    if let Some(pty) = state.ptys.get(&id) {
+        let mut pty_guard = pty.lock().unwrap();
+        pty_guard.master.resize(PtySize {
             rows,
             cols,
             pixel_width: 0,
@@ -96,15 +114,23 @@ fn resize_pty(id: String, rows: u16, cols: u16, state: State<'_, AppState>) -> R
     Ok(())
 }
 
+#[tauri::command]
+fn close_pty(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    if let Some((_, pty)) = state.ptys.remove(&id) {
+        let mut pty_guard = pty.lock().unwrap();
+        let _ = pty_guard.child.kill();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
-            pty_writers: Arc::new(Mutex::new(HashMap::new())),
-            pty_masters: Arc::new(Mutex::new(HashMap::new())),
+            ptys: DashMap::new(),
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty])
+        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty, close_pty])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
