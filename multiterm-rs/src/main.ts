@@ -20,9 +20,11 @@ let container: HTMLElement;
 
 let activeTerminalId: string | null = null;
 let isBroadcastMode = false;
+let terminalIdCounter = 0;
 
 async function createTerminalPane(): Promise<TerminalInstance> {
-  const id = `term-${terminalInstances.length + 1}`;
+  terminalIdCounter++;
+  const id = `term-${terminalIdCounter}`;
   
   const pane = document.createElement('div');
   pane.className = 'terminal-pane';
@@ -181,7 +183,9 @@ function closeTerminal() {
     updateSplits();
     
     if (terminalInstances.length > 0) {
-      terminalInstances[terminalInstances.length - 1].term.focus();
+      const remainingInstance = terminalInstances[terminalInstances.length - 1];
+      activeTerminalId = remainingInstance.id;
+      remainingInstance.term.focus();
     }
     
     requestAnimationFrame(() => {
@@ -237,10 +241,22 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Payload Injection
   document.querySelectorAll('#payload-drawer li').forEach(li => {
     li.addEventListener('click', async (e) => {
-      const payload = (e.target as HTMLElement).getAttribute('data-payload');
-      const active = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
-      if (active && active.ptyId && payload) {
-        await invoke("write_pty", { id: active.ptyId, data: payload + "\n" });
+      const payload = (e.currentTarget as HTMLElement).getAttribute('data-payload');
+      if (!payload) return;
+      
+      const injectPayload = payload + "\n";
+      
+      if (isBroadcastMode) {
+        for (const t of terminalInstances) {
+          if (t.ptyId) {
+            await invoke("write_pty", { id: t.ptyId, data: injectPayload });
+          }
+        }
+      } else {
+        const active = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
+        if (active && active.ptyId) {
+          await invoke("write_pty", { id: active.ptyId, data: injectPayload });
+        }
       }
     });
   });

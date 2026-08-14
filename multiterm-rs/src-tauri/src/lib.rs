@@ -69,20 +69,28 @@ fn spawn_pty(
     let ptys = state.ptys.clone();
     
     // Setup Auto-Logging
-    let log_dir = dirs::home_dir().unwrap_or_default().join(".multiterm-logs");
-    std::fs::create_dir_all(&log_dir).unwrap_or_default();
-    let log_path = log_dir.join(format!("{}.log", thread_id));
+    let log_file = if let Some(home) = dirs::home_dir() {
+        let log_dir = home.join(".multiterm-logs");
+        if std::fs::create_dir_all(&log_dir).is_ok() {
+            let log_path = log_dir.join(format!("{}.log", thread_id));
+            std::fs::OpenOptions::new().create(true).append(true).open(log_path).ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     
     thread::spawn(move || {
         let mut reader = reader;
         let mut buf = [0u8; 1024];
-        let mut log_file = std::fs::OpenOptions::new().create(true).append(true).open(log_path).ok();
+        let mut buf_writer = log_file.map(std::io::BufWriter::new);
 
         loop {
             match reader.read(&mut buf) {
                 Ok(n) if n > 0 => {
                     let chunk = &buf[..n];
-                    if let Some(f) = &mut log_file {
+                    if let Some(f) = &mut buf_writer {
                         let _ = f.write_all(chunk);
                     }
                     
@@ -92,6 +100,10 @@ fn spawn_pty(
                     });
                 }
                 _ => {
+                    // Flush log file
+                    if let Some(mut f) = buf_writer {
+                        let _ = f.flush();
+                    }
                     // Clean up map when process dies naturally
                     ptys.remove(&thread_id);
                     break;
