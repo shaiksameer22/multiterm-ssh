@@ -6,7 +6,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 interface TerminalInstance {
-  id: string;
+  id: string; // The split.js pane ID
+  ptyId: string | null; // The Rust PTY UUID
   pane: HTMLElement;
   term: Terminal;
   fitAddon: FitAddon;
@@ -40,13 +41,31 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.loadAddon(fitAddon);
   term.open(pane);
 
-  // Send input to Rust backend
+  const instance: TerminalInstance = { id, ptyId: null, pane, term, fitAddon };
+  terminalInstances.push(instance);
+
+  // We fit first so that the initial rows/cols are accurate before spawning PTY
+  fitAddon.fit();
+
+  // Send input to Rust backend, specifying this exact PTY
   term.onData(async (data: string) => {
-    await invoke("write_pty", { data });
+    if (instance.ptyId) {
+      await invoke("write_pty", { id: instance.ptyId, data });
+    }
   });
 
-  const instance = { id, pane, term, fitAddon };
-  terminalInstances.push(instance);
+  // Notify Rust when the terminal window resizes
+  term.onResize(async (size) => {
+    if (instance.ptyId) {
+      await invoke("resize_pty", { id: instance.ptyId, rows: size.rows, cols: size.cols });
+    }
+  });
+
+  // Ask Rust to spawn a new backend shell for this specific terminal pane
+  instance.ptyId = await invoke("spawn_pty", {
+    rows: term.rows,
+    cols: term.cols
+  });
 
   return instance;
 }
@@ -94,6 +113,9 @@ function closeTerminal() {
     container.removeChild(instance.pane);
     updateSplits();
     
+    // Ideally we would also call a Rust command to close the PTY, 
+    // but the slave shell should naturally exit when the master is dropped if we manage lifecycle.
+    
     requestAnimationFrame(() => {
       terminalInstances.forEach(t => t.fitAddon.fit());
     });
@@ -103,10 +125,7 @@ function closeTerminal() {
 window.addEventListener('DOMContentLoaded', async () => {
   container = document.getElementById('terminal-container')!;
   
-  const firstTerm = await createTerminalPane();
-  requestAnimationFrame(() => {
-    firstTerm.fitAddon.fit();
-  });
+  await createTerminalPane();
 
   // Hotkeys for splitting and closing panes
   window.addEventListener('keydown', (e) => {
@@ -126,16 +145,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     terminalInstances.forEach(t => t.fitAddon.fit());
   });
 
-  // Spawn Rust PTY
-  await invoke("spawn_pty");
-
-  // Listen for Rust PTY output and broadcast to the active terminal
-  await listen("pty-output", (event) => {
-    const uint8Array = new Uint8Array(event.payload as number[]);
-    const decoder = new TextDecoder();
-    const data = decoder.decode(uint8Array);
+  // Listen for Rust PTY output and broadcast only to the correct terminal instance
+  await listen("pty-output", (event: any) => {
+    const payload = event.payload; // { id: string, data: number[] }
+    const instance = terminalInstances.find(t => t.ptyId === payload.id);
     
-    // Broadcast data to all terminal panes (for MVP demo purposes)
-    terminalInstances.forEach(t => t.term.write(data));
+    if (instance) {
+      const uint8Array = new Uint8Array(payload.data);
+      const decoder = new TextDecoder();
+      instance.term.write(decoder.decode(uint8Array));
+    }
   });
 });
