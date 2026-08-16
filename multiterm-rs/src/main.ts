@@ -39,7 +39,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
       selectionBackground: '#3d3d3d',
     },
     cursorBlink: true,
-    fontFamily: '"Fira Code", monospace',
+    fontFamily: '"Fira Code", Consolas, "Courier New", monospace',
     fontSize: 14,
     scrollback: 100000,
   });

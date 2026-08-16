@@ -31,7 +31,7 @@ fn ensure_ghost_venv() -> Option<PathBuf> {
         if !venv_dir.exists() {
             let python_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
             let status = Command::new(python_cmd)
-                .args(["-m", "venv", venv_dir.to_str().unwrap()])
+                .arg("-m").arg("venv").arg(&venv_dir)
                 .status();
             
             if status.is_err() || !status.unwrap().success() {
@@ -63,7 +63,7 @@ fn spawn_pty(
         .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "windows")]
-    let mut cmd = CommandBuilder::new("cmd.exe");
+    let mut cmd = CommandBuilder::new("powershell.exe");
 
     #[cfg(not(target_os = "windows"))]
     let mut cmd = CommandBuilder::new("bash");
@@ -79,11 +79,13 @@ fn spawn_pty(
             venv_dir.join("bin")
         };
         
-        let current_path = std::env::var("PATH").unwrap_or_default();
-        let path_separator = if cfg!(target_os = "windows") { ";" } else { ":" };
-        let new_path = format!("{}{}{}", bin_dir.to_string_lossy(), path_separator, current_path);
-        
-        cmd.env("PATH", new_path);
+        let mut paths = vec![bin_dir];
+        if let Some(current_path) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&current_path));
+        }
+        if let Ok(new_path) = std::env::join_paths(paths) {
+            cmd.env("PATH", new_path);
+        }
         cmd.env("VIRTUAL_ENV", venv_dir);
     }
 
