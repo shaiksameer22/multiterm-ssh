@@ -41,7 +41,21 @@ async function createTerminalPane(): Promise<TerminalInstance> {
     cursorBlink: true,
     fontFamily: '"Fira Code", Consolas, "Courier New", monospace',
     fontSize: 14,
-    scrollback: 100000,
+    scrollback: 10000,
+    rightClickSelectsWord: true,
+    windowsMode: true,
+  } as any);
+
+  term.attachCustomKeyEventHandler((e) => {
+    if (e.ctrlKey && e.shiftKey) {
+      const key = e.key.toLowerCase();
+      if (['d', 'w', 'b', 'p'].includes(key)) {
+        if (e.type === 'keydown') {
+          return false;
+        }
+      }
+    }
+    return true;
   });
 
   // Regex Highlighting via LinkProvider (IP Addresses for MVP)
