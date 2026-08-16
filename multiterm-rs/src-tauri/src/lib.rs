@@ -3,6 +3,8 @@ use dashmap::DashMap;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::path::PathBuf;
+use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
 use serde::Serialize;
@@ -21,6 +23,25 @@ struct PtyContext {
 
 struct AppState {
     ptys: DashMap<String, Arc<Mutex<PtyContext>>>,
+}
+
+fn ensure_ghost_venv() -> Option<PathBuf> {
+    if let Some(home) = dirs::home_dir() {
+        let venv_dir = home.join(".multiterm-sandbox").join("venv");
+        if !venv_dir.exists() {
+            let python_cmd = if cfg!(target_os = "windows") { "python" } else { "python3" };
+            let status = Command::new(python_cmd)
+                .args(["-m", "venv", venv_dir.to_str().unwrap()])
+                .status();
+            
+            if status.is_err() || !status.unwrap().success() {
+                return None;
+            }
+        }
+        Some(venv_dir)
+    } else {
+        None
+    }
 }
 
 #[tauri::command]
@@ -42,13 +63,29 @@ fn spawn_pty(
         .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "windows")]
-    let cmd = CommandBuilder::new("cmd.exe");
+    let mut cmd = CommandBuilder::new("cmd.exe");
 
     #[cfg(not(target_os = "windows"))]
     let mut cmd = CommandBuilder::new("bash");
 
     #[cfg(not(target_os = "windows"))]
     cmd.env("TERM", "xterm-256color");
+
+    // Ghost Venv Injection
+    if let Some(venv_dir) = ensure_ghost_venv() {
+        let bin_dir = if cfg!(target_os = "windows") {
+            venv_dir.join("Scripts")
+        } else {
+            venv_dir.join("bin")
+        };
+        
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let path_separator = if cfg!(target_os = "windows") { ";" } else { ":" };
+        let new_path = format!("{}{}{}", bin_dir.to_string_lossy(), path_separator, current_path);
+        
+        cmd.env("PATH", new_path);
+        cmd.env("VIRTUAL_ENV", venv_dir);
+    }
 
     let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
