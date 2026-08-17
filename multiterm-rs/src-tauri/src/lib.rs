@@ -50,6 +50,8 @@ fn spawn_pty(
     state: State<'_, AppState>,
     rows: u16,
     cols: u16,
+    command: Option<String>,
+    args: Option<Vec<String>>,
 ) -> Result<String, String> {
     let pty_system = NativePtySystem::default();
 
@@ -63,10 +65,14 @@ fn spawn_pty(
         .map_err(|e| e.to_string())?;
 
     #[cfg(target_os = "windows")]
-    let mut cmd = CommandBuilder::new("powershell.exe");
+    let mut cmd = CommandBuilder::new(command.unwrap_or_else(|| "powershell.exe".to_string()));
 
     #[cfg(not(target_os = "windows"))]
-    let mut cmd = CommandBuilder::new("bash");
+    let mut cmd = CommandBuilder::new(command.unwrap_or_else(|| "bash".to_string()));
+
+    if let Some(a) = args {
+        cmd.args(&a);
+    }
 
     #[cfg(not(target_os = "windows"))]
     cmd.env("TERM", "xterm-256color");

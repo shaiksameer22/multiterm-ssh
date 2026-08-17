@@ -16,7 +16,47 @@ html, body {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
 }
+
+#ssh-header {
+  display: flex;
+  align-items: center;
+  background: #2d2d2d;
+  padding: 8px 15px;
+  border-bottom: 1px solid #444;
+  gap: 10px;
+}
+
+#ssh-header input {
+  background: #1e1e1e;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+#ssh-header input:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+#ssh-user, #ssh-host, #ssh-pass { width: 120px; }
+#ssh-port { width: 60px; }
+.at-symbol { color: #888; }
+
+#ssh-connect-btn {
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 6px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+#ssh-connect-btn:hover { background: #005a9e; }
 
 #terminal-container {
   width: 100%;

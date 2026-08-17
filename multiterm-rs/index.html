@@ -9,6 +9,14 @@
   </head>
   <body>
     <div id="app-container">
+      <div id="ssh-header">
+        <input type="text" id="ssh-user" placeholder="User" />
+        <span class="at-symbol">@</span>
+        <input type="text" id="ssh-host" placeholder="Host" />
+        <input type="number" id="ssh-port" placeholder="Port" value="22" />
+        <input type="password" id="ssh-pass" placeholder="Password" />
+        <button id="ssh-connect-btn">Connect</button>
+      </div>
       <div id="terminal-container"></div>
       <button id="settings-toggle-btn" title="Open Settings">⚙️</button>
       <div id="payload-drawer" class="hidden">

@@ -78,6 +78,8 @@ interface TerminalInstance {
   term: Terminal;
   fitAddon: FitAddon;
   decoder: TextDecoder;
+  command?: string;
+  args?: string[];
 }
 
 const terminalInstances: TerminalInstance[] = [];
@@ -88,7 +90,7 @@ let activeTerminalId: string | null = null;
 let isBroadcastMode = false;
 let terminalIdCounter = 0;
 
-async function createTerminalPane(): Promise<TerminalInstance> {
+async function createTerminalPane(command?: string, args?: string[]): Promise<TerminalInstance> {
   terminalIdCounter++;
   const id = `term-${terminalIdCounter}`;
   
@@ -118,7 +120,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.attachCustomKeyEventHandler((e) => {
     if (e.ctrlKey && e.shiftKey) {
       const key = e.key.toLowerCase();
-      if (['d', 'w', 'b', 'p', 'e'].includes(key)) {
+      if (['d', 't', 'w', 'b', 'p', 'e'].includes(key)) {
         if (e.type === 'keydown') {
           return false;
         }
@@ -182,7 +184,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.loadAddon(fitAddon);
   term.open(pane);
 
-  const instance: TerminalInstance = { id, ptyId: null, pane, term, fitAddon, decoder: new TextDecoder() };
+  const instance: TerminalInstance = { id, ptyId: null, pane, term, fitAddon, decoder: new TextDecoder(), command, args };
   terminalInstances.push(instance);
 
   // Track active terminal via DOM
@@ -222,7 +224,9 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   // Ask Rust to spawn a new backend shell for this specific terminal pane
   instance.ptyId = await invoke("spawn_pty", {
     rows: term.rows,
-    cols: term.cols
+    cols: term.cols,
+    command,
+    args
   });
 
   return instance;
@@ -265,8 +269,8 @@ function updateSplits() {
   }
 }
 
-async function splitTerminal() {
-  await createTerminalPane();
+async function splitTerminal(command?: string, args?: string[]) {
+  await createTerminalPane(command, args);
   updateSplits();
   
   requestAnimationFrame(() => {
@@ -312,9 +316,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Hotkeys for splitting and closing panes
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.shiftKey) {
-      if (e.key.toLowerCase() === 'd') {
+      if (e.key.toLowerCase() === 'd' || e.key.toLowerCase() === 't') {
         e.preventDefault();
-        splitTerminal();
+        const activeInstance = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
+        splitTerminal(activeInstance?.command, activeInstance?.args);
       } else if (e.key.toLowerCase() === 'w') {
         e.preventDefault();
         closeTerminal();
@@ -382,6 +387,45 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     });
   });
+
+  // SSH Connect Logic
+  const connectBtn = document.getElementById('ssh-connect-btn');
+  if (connectBtn) {
+    connectBtn.addEventListener('click', async () => {
+      const user = (document.getElementById('ssh-user') as HTMLInputElement).value;
+      const host = (document.getElementById('ssh-host') as HTMLInputElement).value;
+      const port = (document.getElementById('ssh-port') as HTMLInputElement).value || '22';
+      const pass = (document.getElementById('ssh-pass') as HTMLInputElement).value;
+      
+      if (!user || !host) {
+        alert("User and Host are required!");
+        return;
+      }
+      
+      let command: string | undefined;
+      let args: string[] | undefined;
+      
+      if (pass) {
+        command = "sshpass";
+        args = ["-p", pass, "ssh", "-o", "StrictHostKeyChecking=no", "-p", port, `${user}@${host}`];
+      } else {
+        command = "ssh";
+        args = ["-o", "StrictHostKeyChecking=no", "-p", port, `${user}@${host}`];
+      }
+      
+      if (terminalInstances.length === 1 && !terminalInstances[0].command) {
+        // Replace empty local tab
+        const first = terminalInstances[0];
+        if (first.ptyId) { invoke("close_pty", { id: first.ptyId }).catch(console.error); }
+        first.term.dispose();
+        container.removeChild(first.pane);
+        terminalInstances.splice(0, 1);
+        await splitTerminal(command, args);
+      } else {
+        await splitTerminal(command, args);
+      }
+    });
+  }
 
   // Settings UI logic
   const settingsBtn = document.getElementById('settings-toggle-btn');
