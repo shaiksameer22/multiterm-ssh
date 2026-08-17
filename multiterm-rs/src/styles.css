@@ -104,3 +104,45 @@ body.broadcast-active .terminal-pane {
 #payload-drawer li:hover {
   background: #444;
 }
+
+#settings-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100vh;
+  background: #252526;
+  border-left: 1px solid #444;
+  color: #fff;
+  z-index: 100;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: sans-serif;
+  transition: transform 0.3s ease;
+}
+
+#settings-drawer.hidden {
+  transform: translateX(100%);
+}
+
+#settings-drawer h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #444;
+  padding-bottom: 10px;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.setting-item input[type="color"] {
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 40px;
+  height: 30px;
+  padding: 0;
+}

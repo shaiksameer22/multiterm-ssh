@@ -31,9 +31,11 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   pane.id = id;
   container.appendChild(pane);
 
+  const savedBgColor = localStorage.getItem('termBgColor') || '#1e1e1e';
+
   const term = new Terminal({
     theme: {
-      background: '#1e1e1e',
+      background: savedBgColor,
       foreground: '#f6f6f6',
       cursor: '#f6f6f6',
       selectionBackground: '#3d3d3d',
@@ -49,7 +51,7 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   term.attachCustomKeyEventHandler((e) => {
     if (e.ctrlKey && e.shiftKey) {
       const key = e.key.toLowerCase();
-      if (['d', 'w', 'b', 'p', 'e'].includes(key)) {
+      if (['d', 'w', 'b', 'p', 'e', 's'].includes(key)) {
         if (e.type === 'keydown') {
           return false;
         }
@@ -271,6 +273,12 @@ window.addEventListener('DOMContentLoaded', async () => {
              alert("Please highlight a file or folder path first!");
           }
         }
+      } else if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        const drawer = document.getElementById('settings-drawer');
+        if (drawer) {
+          drawer.classList.toggle('hidden');
+        }
       }
     }
   });
@@ -313,4 +321,20 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     });
   });
+
+  // Settings: Background Color
+  const colorPicker = document.getElementById('bg-color-picker') as HTMLInputElement;
+  if (colorPicker) {
+    const savedBgColor = localStorage.getItem('termBgColor');
+    if (savedBgColor) {
+      colorPicker.value = savedBgColor;
+    }
+    colorPicker.addEventListener('input', (e) => {
+      const newColor = (e.target as HTMLInputElement).value;
+      localStorage.setItem('termBgColor', newColor);
+      terminalInstances.forEach(t => {
+        t.term.options.theme = { ...t.term.options.theme, background: newColor };
+      });
+    });
+  }
 });
