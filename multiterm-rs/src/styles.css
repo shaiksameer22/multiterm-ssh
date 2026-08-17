@@ -150,3 +150,22 @@ body.broadcast-active .terminal-pane {
   height: 30px;
   padding: 0;
 }
+
+#settings-toggle-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: #333;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  z-index: 50;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+#settings-toggle-btn:hover {
+  background: #444;
+}
