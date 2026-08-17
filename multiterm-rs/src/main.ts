@@ -56,10 +56,10 @@ function applySettingsToAllTerminals() {
     t.term.options.fontFamily = appSettings.fontFamily;
     t.term.options.fontSize = appSettings.fontSize;
     t.term.options.theme = {
-      ...t.term.options.theme,
       background: appSettings.bgColor,
       foreground: appSettings.fgColor,
       cursor: appSettings.fgColor,
+      selectionBackground: '#3d3d3d',
     };
     t.term.options.cursorStyle = appSettings.cursorStyle;
     t.term.options.cursorBlink = appSettings.cursorBlink;
