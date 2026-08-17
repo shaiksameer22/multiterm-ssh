@@ -109,42 +109,162 @@ body.broadcast-active .terminal-pane {
   background: #444;
 }
 
-#settings-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 300px;
-  height: 100vh;
+/* Settings Modal */
+#settings-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+#settings-modal.hidden {
+  display: none;
+}
+
+.settings-modal-content {
   background: #252526;
-  border-left: 1px solid #444;
-  color: #fff;
-  z-index: 100;
-  padding: 20px;
-  box-sizing: border-box;
-  font-family: sans-serif;
-  transition: transform 0.3s ease;
+  width: 600px;
+  max-width: 90vw;
+  height: 400px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
-#settings-drawer.hidden {
-  transform: translateX(100%);
-}
-
-#settings-drawer h3 {
-  margin-top: 0;
-  border-bottom: 1px solid #444;
-  padding-bottom: 10px;
-}
-
-.setting-item {
+.settings-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
+  padding: 15px 20px;
+  background: #1e1e1e;
+  border-bottom: 1px solid #333;
 }
 
-.setting-item input[type="color"] {
-  background: none;
+.settings-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #fff;
+}
+
+#close-settings-btn {
+  background: transparent;
   border: none;
+  color: #888;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+}
+
+#close-settings-btn:hover {
+  color: #fff;
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.settings-sidebar {
+  width: 150px;
+  background: #1e1e1e;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: #ccc;
+  padding: 12px 15px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.tab-btn:hover {
+  background: #2a2d2e;
+}
+
+.tab-btn.active {
+  background: #37373d;
+  color: #fff;
+  border-left: 3px solid #007acc;
+}
+
+.settings-panels {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #252526;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.setting-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.setting-group label {
+  font-size: 14px;
+  color: #ccc;
+}
+
+.setting-group input[type="text"],
+.setting-group input[type="number"],
+.setting-group select {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  color: #fff;
+  padding: 5px 8px;
+  border-radius: 4px;
+  width: 180px;
+  font-family: inherit;
+}
+
+.setting-group input[type="text"]:focus,
+.setting-group input[type="number"]:focus,
+.setting-group select:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.setting-group.checkbox-group {
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.setting-group.checkbox-group label {
+  order: 2;
+}
+
+.setting-group.checkbox-group input[type="checkbox"] {
+  order: 1;
+  cursor: pointer;
+}
+
+.setting-group input[type="color"] {
+  background: none;
+  border: 1px solid #555;
+  border-radius: 4px;
   cursor: pointer;
   width: 40px;
   height: 30px;

@@ -5,6 +5,72 @@ import Split from 'split.js';
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+interface AppSettings {
+  fontFamily: string;
+  fontSize: number;
+  bgColor: string;
+  fgColor: string;
+  cursorStyle: 'block' | 'underline' | 'bar';
+  cursorBlink: boolean;
+  scrollback: number;
+  rightClickSelectsWord: boolean;
+}
+
+const defaultSettings: AppSettings = {
+  fontFamily: '"Fira Code", Consolas, "Courier New", monospace',
+  fontSize: 14,
+  bgColor: '#1e1e1e',
+  fgColor: '#f6f6f6',
+  cursorStyle: 'block',
+  cursorBlink: true,
+  scrollback: 10000,
+  rightClickSelectsWord: true,
+};
+
+function loadSettings(): AppSettings {
+  const saved = localStorage.getItem('multitermSettings');
+  if (saved) {
+    try {
+      return { ...defaultSettings, ...JSON.parse(saved) };
+    } catch (e) {
+      console.error("Failed to parse settings", e);
+    }
+  }
+  const oldBg = localStorage.getItem('termBgColor');
+  if (oldBg) {
+    return { ...defaultSettings, bgColor: oldBg };
+  }
+  return { ...defaultSettings };
+}
+
+let appSettings = loadSettings();
+
+function saveSettings(newSettings: Partial<AppSettings>) {
+  appSettings = { ...appSettings, ...newSettings };
+  localStorage.setItem('multitermSettings', JSON.stringify(appSettings));
+  applySettingsToAllTerminals();
+}
+
+function applySettingsToAllTerminals() {
+  terminalInstances.forEach(t => {
+    t.term.options.fontFamily = appSettings.fontFamily;
+    t.term.options.fontSize = appSettings.fontSize;
+    t.term.options.theme = {
+      ...t.term.options.theme,
+      background: appSettings.bgColor,
+      foreground: appSettings.fgColor,
+      cursor: appSettings.fgColor,
+    };
+    t.term.options.cursorStyle = appSettings.cursorStyle;
+    t.term.options.cursorBlink = appSettings.cursorBlink;
+    t.term.options.scrollback = appSettings.scrollback;
+    t.term.options.rightClickSelectsWord = appSettings.rightClickSelectsWord;
+
+    t.pane.style.backgroundColor = appSettings.bgColor;
+    t.fitAddon.fit();
+  });
+}
+
 interface TerminalInstance {
   id: string; // The split.js pane ID
   ptyId: string | null; // The Rust PTY UUID
@@ -31,21 +97,21 @@ async function createTerminalPane(): Promise<TerminalInstance> {
   pane.id = id;
   container.appendChild(pane);
 
-  const savedBgColor = localStorage.getItem('termBgColor') || '#1e1e1e';
-  pane.style.backgroundColor = savedBgColor;
+  pane.style.backgroundColor = appSettings.bgColor;
 
   const term = new Terminal({
     theme: {
-      background: savedBgColor,
-      foreground: '#f6f6f6',
-      cursor: '#f6f6f6',
+      background: appSettings.bgColor,
+      foreground: appSettings.fgColor,
+      cursor: appSettings.fgColor,
       selectionBackground: '#3d3d3d',
     },
-    cursorBlink: true,
-    fontFamily: '"Fira Code", Consolas, "Courier New", monospace',
-    fontSize: 14,
-    scrollback: 10000,
-    rightClickSelectsWord: true,
+    cursorBlink: appSettings.cursorBlink,
+    cursorStyle: appSettings.cursorStyle,
+    fontFamily: appSettings.fontFamily,
+    fontSize: appSettings.fontSize,
+    scrollback: appSettings.scrollback,
+    rightClickSelectsWord: appSettings.rightClickSelectsWord,
     windowsMode: true,
   } as any);
 
@@ -317,28 +383,84 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Settings: Background Color
+  // Settings UI logic
   const settingsBtn = document.getElementById('settings-toggle-btn');
-  const settingsDrawer = document.getElementById('settings-drawer');
-  if (settingsBtn && settingsDrawer) {
+  const settingsModal = document.getElementById('settings-modal');
+  const closeSettingsBtn = document.getElementById('close-settings-btn');
+  
+  if (settingsBtn && settingsModal && closeSettingsBtn) {
     settingsBtn.addEventListener('click', () => {
-      settingsDrawer.classList.toggle('hidden');
+      settingsModal.classList.remove('hidden');
+    });
+    
+    closeSettingsBtn.addEventListener('click', () => {
+      settingsModal.classList.add('hidden');
+    });
+
+    // Close on click outside
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        settingsModal.classList.add('hidden');
+      }
     });
   }
 
-  const colorPicker = document.getElementById('bg-color-picker') as HTMLInputElement;
-  if (colorPicker) {
-    const savedBgColor = localStorage.getItem('termBgColor');
-    if (savedBgColor) {
-      colorPicker.value = savedBgColor;
-    }
-    colorPicker.addEventListener('input', (e) => {
-      const newColor = (e.target as HTMLInputElement).value;
-      localStorage.setItem('termBgColor', newColor);
-      terminalInstances.forEach(t => {
-        t.term.options.theme = { ...t.term.options.theme, background: newColor };
-        t.pane.style.backgroundColor = newColor;
-      });
+  // Tabs logic
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const target = e.currentTarget as HTMLElement;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      
+      target.classList.add('active');
+      const tabId = target.getAttribute('data-tab');
+      const panel = document.getElementById(`tab-${tabId}`);
+      if (panel) panel.classList.add('active');
     });
-  }
+  });
+
+  // Populate UI with current settings
+  const elFontFamily = document.getElementById('font-family') as HTMLInputElement;
+  const elFontSize = document.getElementById('font-size') as HTMLInputElement;
+  const elBgColor = document.getElementById('bg-color') as HTMLInputElement;
+  const elFgColor = document.getElementById('fg-color') as HTMLInputElement;
+  const elCursorStyle = document.getElementById('cursor-style') as HTMLSelectElement;
+  const elCursorBlink = document.getElementById('cursor-blink') as HTMLInputElement;
+  const elScrollback = document.getElementById('scrollback') as HTMLInputElement;
+  const elRightClickSelect = document.getElementById('right-click-select') as HTMLInputElement;
+
+  if (elFontFamily) elFontFamily.value = appSettings.fontFamily;
+  if (elFontSize) elFontSize.value = appSettings.fontSize.toString();
+  if (elBgColor) elBgColor.value = appSettings.bgColor;
+  if (elFgColor) elFgColor.value = appSettings.fgColor;
+  if (elCursorStyle) elCursorStyle.value = appSettings.cursorStyle;
+  if (elCursorBlink) elCursorBlink.checked = appSettings.cursorBlink;
+  if (elScrollback) elScrollback.value = appSettings.scrollback.toString();
+  if (elRightClickSelect) elRightClickSelect.checked = appSettings.rightClickSelectsWord;
+
+  // Listeners for real-time updates
+  const bindSetting = (el: HTMLElement | null, key: keyof AppSettings, parser: (val: string) => any) => {
+    if (!el) return;
+    const update = (e: Event) => {
+      const target = e.target as HTMLInputElement | HTMLSelectElement;
+      let value: any;
+      if (target.type === 'checkbox') {
+        value = (target as HTMLInputElement).checked;
+      } else {
+        value = parser(target.value);
+      }
+      saveSettings({ [key]: value });
+    };
+    el.addEventListener('input', update);
+    el.addEventListener('change', update);
+  };
+
+  bindSetting(elFontFamily, 'fontFamily', v => v);
+  bindSetting(elFontSize, 'fontSize', v => parseInt(v, 10) || 14);
+  bindSetting(elBgColor, 'bgColor', v => v);
+  bindSetting(elFgColor, 'fgColor', v => v);
+  bindSetting(elCursorStyle, 'cursorStyle', v => v);
+  bindSetting(elCursorBlink, 'cursorBlink', v => v);
+  bindSetting(elScrollback, 'scrollback', v => parseInt(v, 10) || 10000);
+  bindSetting(elRightClickSelect, 'rightClickSelectsWord', v => v);
 });
