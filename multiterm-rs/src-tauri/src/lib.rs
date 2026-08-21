@@ -165,8 +165,10 @@ fn write_pty(id: String, data: String, state: State<'_, AppState>) -> Result<(),
     if let Some(pty) = state.ptys.get(&id) {
         let mut pty_guard = pty.lock().unwrap();
         pty_guard.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        Ok(())
+    } else {
+        Err("PTY not found or already closed".to_string())
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -188,6 +190,7 @@ fn close_pty(id: String, state: State<'_, AppState>) -> Result<(), String> {
     if let Some((_, pty)) = state.ptys.remove(&id) {
         let mut pty_guard = pty.lock().unwrap();
         let _ = pty_guard.child.kill();
+        let _ = pty_guard.child.wait();
     }
     Ok(())
 }

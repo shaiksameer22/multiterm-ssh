@@ -221,13 +221,19 @@ async function createTerminalPane(command?: string, args?: string[]): Promise<Te
     }
   });
 
-  // Ask Rust to spawn a new backend shell for this specific terminal pane
-  instance.ptyId = await invoke("spawn_pty", {
+  // Ask Rust to spawn a new backend shell asynchronously
+  invoke("spawn_pty", {
     rows: term.rows,
     cols: term.cols,
     command,
     args
-  });
+  }).then((ptyId: any) => {
+    instance.ptyId = ptyId as string;
+    // CRITICAL: If pane was closed while we were waiting for PTY spawn, clean it up immediately
+    if (!terminalInstances.find(t => t.id === id)) {
+      invoke("close_pty", { id: ptyId }).catch(console.error);
+    }
+  }).catch(console.error);
 
   return instance;
 }
@@ -339,7 +345,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (activeInstance && activeInstance.ptyId) {
           const selectedText = activeInstance.term.getSelection().trim();
           if (selectedText) {
-             const injectCmd = ` printf "\\033]1337;File=name=exfil.tar.gz;inline=1:%s\\007" "$(tar -czf - '${selectedText}' 2>/dev/null | base64 -w 0)"\r `;
+             const safeText = selectedText.replace(/'/g, "'\\''");
+             const injectCmd = ` printf "\\033]1337;File=name=exfil.tar.gz;inline=1:%s\\007" "$(tar -czf - '${safeText}' 2>/dev/null | base64 -w 0)"\r `;
              invoke('write_pty', { id: activeInstance.ptyId, data: injectCmd });
           } else {
              alert("Please highlight a file or folder path first!");
