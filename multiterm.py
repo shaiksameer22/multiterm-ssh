@@ -738,28 +738,6 @@ class MultiTerm(Gtk.Window):
                     self.settings[sid] = w.get_value()
                 elif t == "string":
                     self.settings[sid] = w.get_text()
-        grid_beh.attach(bell_check, 1, 6, 1, 1)
-        
-        box.show_all()
-        
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            self.settings["font"] = font_btn.get_font_name()
-            self.settings["bg_color"] = bg_btn.get_rgba().to_string()
-            self.settings["fg_color"] = fg_btn.get_rgba().to_string()
-            self.settings["scrollback_lines"] = int(scroll_spin.get_value())
-            self.settings["show_scrollbar"] = scroll_check.get_active()
-            
-            self.settings["cursor_shape"] = cursor_combo.get_active_id() or "block"
-            self.settings["tab_position"] = tab_combo.get_active_id() or "top"
-            self.settings["allow_bold"] = allow_bold_check.get_active()
-            
-            self.settings["cursor_blink"] = blink_check.get_active()
-            self.settings["scroll_on_keystroke"] = scroll_key_check.get_active()
-            self.settings["scroll_on_output"] = scroll_out_check.get_active()
-            self.settings["rewrap_on_resize"] = rewrap_check.get_active()
-            self.settings["audible_bell"] = bell_check.get_active()
-            
             self.save_settings()
             self.apply_settings_to_all_terminals()
             
